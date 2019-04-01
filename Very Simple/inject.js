@@ -18,7 +18,9 @@ function darkifyPage() {
   for (tag in tagsToUnInvert) {
     css += tag + ' { filter: invert(100%) hue-rotate(180deg); }';
   }
-  if (window.location.host == 'www.youtube.com') {
+  if (window.location.host == 'docs.google.com') {
+    css += '#docs-editor-container { filter: invert(100%) hue-rotate(180deg); }';
+  } else if (window.location.host == 'www.youtube.com') {
     css += '#movie_player { background-color: white !important; }';
   }
   injectCSS(css);
