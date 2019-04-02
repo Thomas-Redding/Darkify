@@ -18,8 +18,8 @@ function darkifyPage() {
   for (tag in tagsToUnInvert) {
     css += tag + ' { filter: invert(100%) hue-rotate(180deg); }';
   }
-  if (window.location.host == 'docs.google.com') {
-    css += '#docs-editor-container { filter: invert(100%) hue-rotate(180deg); }';
+  if (window.location.href.indexOf('docs.google.com/spreadsheets') > -1) {
+    css += '#waffle-grid-container { filter: invert(100%) hue-rotate(180deg); }';
   } else if (window.location.host == 'www.youtube.com') {
     css += '#movie_player { background-color: white !important; }';
   }
@@ -75,7 +75,12 @@ var shouldInvert = 0;
 chrome.storage.sync.get('darkify_blacklist', (result) => {
 	var blacklist = result['darkify_blacklist'];
 	if (blacklist === undefined) {
-		chrome.storage.sync.set({'darkify_blacklist': [] }, (x) => {});
+    var prepopulatedBlacklist = [
+      'https://www.netflix.com/*',
+      'https://www.reddit.com/*',
+      'https://photos.google.com',
+    ];
+		chrome.storage.sync.set({'darkify_blacklist': prepopulatedBlacklist }, (x) => {});
 		blacklist = [];
 	}
 	var pageUrl = window.location.href;
