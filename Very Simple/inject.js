@@ -117,6 +117,11 @@ function recursivelyApplyToDom(fn, node) {
 
 // Uninvert divs that have a background image, or that are iFrames.
 function uninvert_smartly(node) {
+  if (node.nodeName === 'IFRAME') {
+    node.style.filter = 'invert(100%)';
+    return;
+  }
+
   let style;
   try {
     style = window.getComputedStyle(node)
@@ -124,11 +129,18 @@ function uninvert_smartly(node) {
   let x = false;
   x |= style.getPropertyValue('background-image').includes('url');
   x |= style.getPropertyValue('background').includes('url');
-  x |= node.nodeName === 'IFRAME';
   if (x) {
-    node.style.filter = 'invert(100%)';
+    // Only invert sufficiently large images.  Small ones are
+    // probably icons.
+    let rect = node.getBoundingClientRect();
+    let body = document.body.getBoundingClientRect();
+    if (rect.width * 16 > body.width) {
+      node.style.filter = 'invert(100%)';
+    }
   }
 }
+
+// getBoundingClientRect()
 
 function endsWithAny(string, suffixes) {
   for (let suffix of suffixes) {
