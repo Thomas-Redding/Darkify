@@ -14,7 +14,7 @@ function injectCSS(cssText) {
 
 function darkifyPage() {
   let css = '';
-  css += 'html { background-color: black; filter: invert(100%) hue-rotate(180deg); }';
+  css += 'html { background-color: black; filter: invert(100%) hue-rotate(180deg) brightness(0.7); }';
   for (tag in tagsToUnInvert) {
     css += tag + ' { filter: invert(100%) hue-rotate(180deg); }';
   }
