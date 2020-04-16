@@ -1,6 +1,7 @@
 
 
 let USE_TRANSPARENT_INVERSION_HEURISTIC = true;
+let CACHE_TRANSPARENCY_TEST = true;
 let PAGE_BRIGHTNESS = 0.7;
 let ICON_THRESHOLD = 32;
 
@@ -227,13 +228,27 @@ function maybeInvertImage(element, url) {
 //   * false - the image has only opaque pixels
 //   * undefined - an error occured (probably cross origin in nature)
 function imageTransparentAtURL(url, callback) {
+  if (!imageTransparentAtURL._cache) {
+    imageTransparentAtURL._cache = {};
+  }
+  if (CACHE_TRANSPARENCY_TEST) {
+    if (url in imageTransparentAtURL._cache) {
+      return imageTransparentAtURL._cache[url];
+    }
+  }
   let image = new Image();
   image.crossOrigin = "Anonymous";
   image.onload = () => {
     let isTransparent = isLoadedImageTransparent(image);
+    if (CACHE_TRANSPARENCY_TEST) {
+      imageTransparentAtURL._cache[url] = isTransparent;
+    }
     callback(url, isTransparent);
   }
   image.onerror = () => {
+    if (CACHE_TRANSPARENCY_TEST) {
+      imageTransparentAtURL._cache[url] = undefined;
+    }
     callback(url, undefined);
   }
   image.src = url
