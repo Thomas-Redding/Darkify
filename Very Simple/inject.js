@@ -5,6 +5,8 @@ let tagsToUnInvert = {
   'VIDEO': 1
 }
 
+let USE_TRANSPARENT_INVERSION_HEURISTIC = true;
+
 function injectCSS(cssText) {
   let cssElement = document.createElement("style");
   cssElement.type = "text/css";
@@ -126,21 +128,88 @@ function uninvert_smartly(node) {
   try {
     style = window.getComputedStyle(node)
   } catch {}
-  let x = false;
-  x |= style.getPropertyValue('background-image').includes('url');
-  x |= style.getPropertyValue('background').includes('url');
-  if (x) {
-    // Only invert sufficiently large images.  Small ones are
-    // probably icons.
-    let rect = node.getBoundingClientRect();
-    let body = document.body.getBoundingClientRect();
-    if (rect.width * 16 > body.width) {
-      node.style.filter = 'invert(100%)';
+
+  let backgroundImageSource = null;
+  if (style.getPropertyValue('background-image').includes('url')) {
+    backgroundImageSource = style.getPropertyValue('background-image');
+  } else if (style.getPropertyValue('background').includes('url')) {
+    backgroundImageSource = style.getPropertyValue('background');
+  }
+
+  if (backgroundImageSource != null) {
+    node.style.filter = 'invert(100%)';
+    if (USE_TRANSPARENT_INVERSION_HEURISTIC) {
+      let urlStart = backgroundImageSource.indexOf("\"") + 1;
+      let urlEnd = backgroundImageSource.lastIndexOf("\"") - 1;
+      backgroundImageSource = backgroundImageSource.substr(urlStart, urlEnd - urlStart + 1)
+      imageTransparentAtURL(backgroundImageSource, (url, isTransparent) => {
+        if (isTransparent === true) {
+          node.style.filter = '';
+        } else if (isTransparent === false) {
+          // do nothing
+        } else {
+          // There was a cross-origin issue, so we can't determine if the image is transparent.
+          // Therefore, we use the heuristic that small images shouldn't be uninverted.
+          let rect = node.getBoundingClientRect();
+          if (Math.min(rect.width, rect.height) < 32) {
+            node.style.filter = '';
+          }
+        }
+      });
+    } else {
+      // Only invert sufficiently large images.  Small ones are probably icons.
+      let rect = node.getBoundingClientRect();
+      let body = document.body.getBoundingClientRect();
+      if (rect.width * 16 > body.width) {
+        node.style.filter = 'invert(100%)';
+      }
     }
   }
 }
 
-// getBoundingClientRect()
+function imageTransparentAtURL(url, callback) {
+  if (!imageTransparentAtURL._cache) {
+    imageTransparentAtURL._cache = {};
+  }
+  if (url in imageTransparentAtURL._cache) {
+    return callback(url, imageTransparentAtURL._cache[url]);
+  }
+  let image = new Image();
+  image.crossOrigin = "Anonymous";
+  image.onload = () => {
+    if (url in imageTransparentAtURL._cache) {
+      return callback(url, imageTransparentAtURL._cache[url]);
+    }
+    let isTransparent = isImageTransparent(image);
+    imageTransparentAtURL._cache[url] = isTransparent;
+    callback(url, isTransparent);
+  }
+  image.src = url
+}
+
+// This image returns `true` if the image has any translucent pixels. It returns
+// `false`` if the image has all opaque pixels. It returns `undefined` in the
+// case of a cross origin error.
+function isImageTransparent(image) {
+  if (!isImageTransparent._canvas) {
+    isImageTransparent._canvas = document.createElement("canvas");
+    isImageTransparent._context = isImageTransparent._canvas.getContext("2d");
+  }
+  isImageTransparent._canvas.width = image.width;
+  isImageTransparent._canvas.height = image.height;
+  isImageTransparent._context.drawImage(image, 0, 0);
+  let data;
+  try {
+    data = isImageTransparent._context.getImageData(0, 0, isImageTransparent._canvas.width, isImageTransparent._canvas.height).data;
+  } catch {
+    // Probably a cross origin error.
+    return undefined;
+  }
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] < 255) return true;
+  }
+  return false;
+}
 
 function endsWithAny(string, suffixes) {
   for (let suffix of suffixes) {
