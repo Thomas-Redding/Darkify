@@ -295,8 +295,7 @@ chrome.storage.sync.get('darkify_blacklist', (result) => {
   if (blacklist === undefined) {
     let prepopulatedBlacklist = [
       'https://www.netflix.com/*',
-      'https://www.reddit.com/*',
-      'https://photos.google.com',
+      'https://www.disneyplus.com/*',
     ];
     chrome.storage.sync.set({'darkify_blacklist': prepopulatedBlacklist }, (x) => {});
     blacklist = [];
