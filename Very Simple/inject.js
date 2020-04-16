@@ -2,6 +2,7 @@
 
 let USE_TRANSPARENT_INVERSION_HEURISTIC = true;
 let PAGE_BRIGHTNESS = 0.7;
+let ICON_THRESHOLD = 32;
 
 // Inject a <style> tag with the given CSS string.
 function injectCSS(cssText) {
@@ -67,14 +68,18 @@ let coverObserver = new MutationObserver(() => {
 });
 coverObserver.observe(document.documentElement, { childList: true });
 
-// We use this observer to uninvert iFrames and nodes with background images.
-let observer = new MutationObserver((mutations) => {
-  mutations.forEach((mutation) => {
-    for (let node of mutation.addedNodes) {
-      recursivelyApplyToDom(uninvert_smartly, node);
-    }
-  })
-});
+
+// Note: Chrome does not support "DOMAttrModified" devents, so we need to use
+// mutation observers.
+
+function listenToImageSourceChange(element) {
+  let observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      uninvert_smartly(mutation.target);
+    });
+  });
+  observer.observe(element, {attributes: true});
+}
 
 let isLoaded = false;
 window.addEventListener('load', () => {
@@ -82,10 +87,37 @@ window.addEventListener('load', () => {
   if (shouldInvert === 1) {
     // Inject css tag to dark-mode the page.
     darkifyPage();
-    // Un-invert some nodes.
+
+    // After injecting the CSS above, the next step is to call
+    // `uninvert_smartly` on everything.
     recursivelyApplyToDom(uninvert_smartly);
+
+    // Finally we need to continue calling `uninvert_smartly` on every new
+    // element and any time <img>.src changes.
+
+    // Call `uninvert_smartly` on every new element.s
+    let observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        for (let node of mutation.addedNodes) {
+          recursivelyApplyToDom((element) => {
+            // Call `uninvert_smartly` on an <img> element when its `src`
+            // attribute changes.
+            if (element.tagName != "IMG") return;
+            listenToImageSourceChange(element);
+          }, node)
+          recursivelyApplyToDom(uninvert_smartly, node);
+        }
+      })
+    });
     // Set up observer to un-invert some nodes as they're created.
     observer.observe(document.body, { childList: true });
+
+    // Call `uninvert_smartly` on an <img> element when its `src` attribute
+    // changes.
+    recursivelyApplyToDom((element) => {
+      if (element.tagName != "IMG") return;
+      listenToImageSourceChange(element);
+    });
   }
   // When (actually before) the page loaded we covered it with a
   // div to prevent the "flashbang" effect where a page is
@@ -111,7 +143,7 @@ function wildcardStringMatch(pattern, string) {
   return true;
 }
 
-// Recursively apply `fn` to `node` and all of its children. If no `node` is
+// Recursively apply `fn` to `node` and all of its descendants. If no `node` is
 // given, apply to all nodes.
 function recursivelyApplyToDom(fn, node) {
   if (node === undefined) {
@@ -136,7 +168,7 @@ function uninvert_smartly(node) {
   } catch {}
 
   if (USE_TRANSPARENT_INVERSION_HEURISTIC) {
-    if (node.nodeName) {
+    if (node.nodeName == "IMG") {
       maybeInvertImage(node, node.src);
     } else {
       let backgroundImageSource = null;
@@ -157,10 +189,10 @@ function uninvert_smartly(node) {
     hasBackgroundImageSource |= style.getPropertyValue('background-image').includes('url');
     hasBackgroundImageSource |= style.getPropertyValue('background').includes('url');
     if (hasBackgroundImageSource) {
-      // Only invert sufficiently large images.  Small ones are probably icons.
+      // Only invert sufficiently large images. Small ones are probably icons.
       let rect = node.getBoundingClientRect();
       let body = document.body.getBoundingClientRect();
-      if (rect.width * 16 > body.width) {
+      if (rect.width > ICON_THRESHOLD) {
         node.style.filter = 'invert(100%) hue-rotate(180deg)';
       }
     }
@@ -178,12 +210,16 @@ function maybeInvertImage(element, url) {
       // There was a cross-origin issue, so we can't determine if the image is transparent.
       // Therefore, we use the heuristic that small images shouldn't be uninverted.
       let rect = element.getBoundingClientRect();
-      if (Math.min(rect.width, rect.height) < 32) {
+      if (Math.min(rect.width, rect.height) < ICON_THRESHOLD) {
         element.style.filter = '';
+      } else {
+        element.style.filter = 'invert(100%) hue-rotate(180deg)';
       }
     }
   });
 }
+
+// maybeInvertImage(document.getElementById(":2r_1-e"), document.getElementById(":2r_1-e").src)
 
 // Calls `callback(url, result)` either synchronously or asynchronously.
 // `result` may take one of three values:
@@ -191,40 +227,34 @@ function maybeInvertImage(element, url) {
 //   * false - the image has only opaque pixels
 //   * undefined - an error occured (probably cross origin in nature)
 function imageTransparentAtURL(url, callback) {
-  if (!imageTransparentAtURL._cache) {
-    imageTransparentAtURL._cache = {};
-  }
-  if (url in imageTransparentAtURL._cache) {
-    return callback(url, imageTransparentAtURL._cache[url]);
-  }
   let image = new Image();
   image.crossOrigin = "Anonymous";
   image.onload = () => {
-    if (url in imageTransparentAtURL._cache) {
-      return callback(url, imageTransparentAtURL._cache[url]);
-    }
-    let isTransparent = isImageTransparent(image);
-    imageTransparentAtURL._cache[url] = isTransparent;
+    let isTransparent = isLoadedImageTransparent(image);
     callback(url, isTransparent);
+  }
+  image.onerror = () => {
+    callback(url, undefined);
   }
   image.src = url
 }
 
 // A synchronous version of `imageTransparentAtURL` for when the image is
 // already loaded.
-function isImageTransparent(image) {
-  if (!isImageTransparent._canvas) {
-    isImageTransparent._canvas = document.createElement("canvas");
-    isImageTransparent._context = isImageTransparent._canvas.getContext("2d");
+function isLoadedImageTransparent(image) {
+  if (!isLoadedImageTransparent._canvas) {
+    isLoadedImageTransparent._canvas = document.createElement("canvas");
+    isLoadedImageTransparent._context = isLoadedImageTransparent._canvas.getContext("2d");
   }
-  isImageTransparent._canvas.width = image.width;
-  isImageTransparent._canvas.height = image.height;
-  isImageTransparent._context.drawImage(image, 0, 0);
+  isLoadedImageTransparent._canvas.width = image.width;
+  isLoadedImageTransparent._canvas.height = image.height;
+  isLoadedImageTransparent._context.drawImage(image, 0, 0);
   let data;
   try {
-    data = isImageTransparent._context.getImageData(0, 0, isImageTransparent._canvas.width, isImageTransparent._canvas.height).data;
+    data = isLoadedImageTransparent._context.getImageData(0, 0, isLoadedImageTransparent._canvas.width, isLoadedImageTransparent._canvas.height).data;
   } catch {
-    // Probably a cross origin error.
+    // An error occured fetching the image's pixel data. This is probably due to
+    // cross origin restrictions.
     return undefined;
   }
   for (let i = 3; i < data.length; i += 4) {
