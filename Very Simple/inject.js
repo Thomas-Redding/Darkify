@@ -1,12 +1,8 @@
 
-let tagsToUnInvert = {
-  'IMG': 1,
-  'CANVAS': 1,
-  'VIDEO': 1
-}
 
 let USE_TRANSPARENT_INVERSION_HEURISTIC = true;
 
+// Inject a <style> tag with the given CSS string.
 function injectCSS(cssText) {
   let cssElement = document.createElement("style");
   cssElement.type = "text/css";
@@ -14,10 +10,12 @@ function injectCSS(cssText) {
   document.body.appendChild(cssElement);
 }
 
+// Inject a style sheet that adds CSS that naively inverting a page and then
+// uninverts <img>, <canvas>, and <video> elements.
 function darkifyPage() {
   let css = '';
   css += 'html { background-color: black; filter: invert(100%) hue-rotate(180deg) brightness(0.7); }';
-  for (tag in tagsToUnInvert) {
+  for (tag in {'IMG': 1, 'CANVAS': 1, 'VIDEO': 1 }) {
     css += tag + ' { filter: invert(100%) hue-rotate(180deg); }';
   }
   if (window.location.href.indexOf('docs.google.com/spreadsheets') > -1) {
@@ -36,6 +34,8 @@ function darkifyPage() {
  *   3) It uninverts some nodes (iFrames and nodes with background images)
  */
 
+// Cover the page in a dark <div> to prevent white flashing during page
+// navigation.
 function coverPage() {
   if (document.body) {
     coverObserver.disconnect();
@@ -52,19 +52,19 @@ function coverPage() {
   }
 }
 
-function uncoverePage() {
+// Remove the <div> added by `coverPage()`.
+function uncoverPage() {
   document.body.removeChild(document.getElementById('loremFishesPear'));
 }
 
-// We use this observer to try and show the cover as quickly as
-// possible.
+// We use this observer to try and show the cover the <div> referenced by
+// `coverPage()` and `uncoverPage()` as quickly as possible.
 let coverObserver = new MutationObserver(() => {
   coverPage();
 });
 coverObserver.observe(document.documentElement, { childList: true });
 
-// We use this observer to uninvert iFrames and nodes with
-// background images.
+// We use this observer to uninvert iFrames and nodes with background images.
 let observer = new MutationObserver((mutations) => {
   mutations.forEach((mutation) => {
     for (let node of mutation.addedNodes) {
@@ -88,9 +88,11 @@ window.addEventListener('load', () => {
   // div to prevent the "flashbang" effect where a page is
   // temporarily pure white.  We need to delete this div now (so
   // the user can see the page).
-  uncoverePage();
+  uncoverPage();
 });
 
+// Check whether `string` fits the given `pattern`.
+// For instance the string "dafaewFOOBARfeawfe" fits the pattern "*foobar*".
 function wildcardStringMatch(pattern, string) {
   if (pattern == "") {
     return false;
@@ -106,7 +108,8 @@ function wildcardStringMatch(pattern, string) {
   return true;
 }
 
-// Recursively apply 'fn' to 'node' and all of its children.
+// Recursively apply `fn` to `node` and all of its children. If no `node` is
+// given, apply to all nodes.
 function recursivelyApplyToDom(fn, node) {
   if (node === undefined) {
     node = document.body;
@@ -117,7 +120,7 @@ function recursivelyApplyToDom(fn, node) {
   }
 }
 
-// Uninvert divs that have a background image, or that are iFrames.
+// Uninvert <div> elements that have a background image, or that are iFrames.
 function uninvert_smartly(node) {
   if (node.nodeName === 'IFRAME') {
     node.style.filter = 'invert(100%)';
@@ -167,6 +170,11 @@ function uninvert_smartly(node) {
   }
 }
 
+// Calls `callback(url, result)` either synchronously or asynchronously.
+// `result` may take one of three values:
+//   * true - the image has at least one translucent pixel
+//   * false - the image has only opaque pixels
+//   * undefined - an error occured (probably cross origin in nature)
 function imageTransparentAtURL(url, callback) {
   if (!imageTransparentAtURL._cache) {
     imageTransparentAtURL._cache = {};
@@ -187,9 +195,8 @@ function imageTransparentAtURL(url, callback) {
   image.src = url
 }
 
-// This image returns `true` if the image has any translucent pixels. It returns
-// `false`` if the image has all opaque pixels. It returns `undefined` in the
-// case of a cross origin error.
+// A synchronous version of `imageTransparentAtURL` for when the image is
+// already loaded.
 function isImageTransparent(image) {
   if (!isImageTransparent._canvas) {
     isImageTransparent._canvas = document.createElement("canvas");
@@ -211,6 +218,7 @@ function isImageTransparent(image) {
   return false;
 }
 
+// Checks if any of the given suffixes ends the given string.
 function endsWithAny(string, suffixes) {
   for (let suffix of suffixes) {
     if (string.endsWith(suffix)) {
