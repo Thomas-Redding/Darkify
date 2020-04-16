@@ -126,7 +126,7 @@ function recursivelyApplyToDom(fn, node) {
 // Uninvert <div> elements that have a background image, or that are iFrames.
 function uninvert_smartly(node) {
   if (node.nodeName === 'IFRAME') {
-    node.style.filter = 'invert(100%)';
+    node.style.filter = 'invert(100%) hue-rotate(180deg)';
     return;
   }
 
@@ -157,12 +157,11 @@ function uninvert_smartly(node) {
     hasBackgroundImageSource |= style.getPropertyValue('background-image').includes('url');
     hasBackgroundImageSource |= style.getPropertyValue('background').includes('url');
     if (hasBackgroundImageSource) {
-      node.style.filter = 'invert(100%)';
       // Only invert sufficiently large images.  Small ones are probably icons.
       let rect = node.getBoundingClientRect();
       let body = document.body.getBoundingClientRect();
       if (rect.width * 16 > body.width) {
-        node.style.filter = 'invert(100%)';
+        node.style.filter = 'invert(100%) hue-rotate(180deg)';
       }
     }
   }
@@ -174,7 +173,7 @@ function maybeInvertImage(element, url) {
     if (isTransparent === true) {
       element.style.filter = '';
     } else if (isTransparent === false) {
-      element.style.filter = 'invert(100%)';
+      element.style.filter = 'invert(100%) hue-rotate(180deg)';
     } else {
       // There was a cross-origin issue, so we can't determine if the image is transparent.
       // Therefore, we use the heuristic that small images shouldn't be uninverted.
