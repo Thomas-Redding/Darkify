@@ -151,6 +151,7 @@ function recursivelyApplyToDom(fn, node) {
     node = document.body;
   }
   fn(node);
+  if (!node.children) return;
   for (let child of node.children) {
     recursivelyApplyToDom(fn, child);
   }
@@ -166,7 +167,9 @@ function uninvert_smartly(node) {
   let style;
   try {
     style = window.getComputedStyle(node)
-  } catch {}
+  } catch {
+    return;
+  }
 
   if (USE_TRANSPARENT_INVERSION_HEURISTIC) {
     if (node.nodeName == "IMG") {
