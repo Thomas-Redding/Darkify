@@ -1,6 +1,7 @@
 
 
 let USE_TRANSPARENT_INVERSION_HEURISTIC = true;
+let PAGE_BRIGHTNESS = 0.7;
 
 // Inject a <style> tag with the given CSS string.
 function injectCSS(cssText) {
@@ -14,10 +15,12 @@ function injectCSS(cssText) {
 // uninverts <img>, <canvas>, and <video> elements.
 function darkifyPage() {
   let css = '';
-  css += 'html { background-color: black; filter: invert(100%) hue-rotate(180deg) brightness(0.7); }';
-  for (tag in {'IMG': 1, 'CANVAS': 1, 'VIDEO': 1 }) {
-    css += tag + ' { filter: invert(100%) hue-rotate(180deg); }';
+  css += 'html { background-color: black; filter: invert(100%) hue-rotate(180deg) brightness(' + PAGE_BRIGHTNESS + '); }';
+  if (!USE_TRANSPARENT_INVERSION_HEURISTIC) {
+    css += 'IMG { filter: invert(100%) hue-rotate(180deg); }';
   }
+  css += 'CANVAS { filter: invert(100%) hue-rotate(180deg); }';
+  css += 'VIDEO { filter: invert(100%) hue-rotate(180deg); }';
   if (window.location.href.indexOf('docs.google.com/spreadsheets') > -1) {
     css += '#waffle-grid-container { filter: invert(100%) hue-rotate(180deg); }';
   } else if (window.location.host == 'www.youtube.com') {
@@ -132,34 +135,29 @@ function uninvert_smartly(node) {
     style = window.getComputedStyle(node)
   } catch {}
 
-  let backgroundImageSource = null;
-  if (style.getPropertyValue('background-image').includes('url')) {
-    backgroundImageSource = style.getPropertyValue('background-image');
-  } else if (style.getPropertyValue('background').includes('url')) {
-    backgroundImageSource = style.getPropertyValue('background');
-  }
-
-  if (backgroundImageSource != null) {
-    node.style.filter = 'invert(100%)';
-    if (USE_TRANSPARENT_INVERSION_HEURISTIC) {
-      let urlStart = backgroundImageSource.indexOf("\"") + 1;
-      let urlEnd = backgroundImageSource.lastIndexOf("\"") - 1;
-      backgroundImageSource = backgroundImageSource.substr(urlStart, urlEnd - urlStart + 1)
-      imageTransparentAtURL(backgroundImageSource, (url, isTransparent) => {
-        if (isTransparent === true) {
-          node.style.filter = '';
-        } else if (isTransparent === false) {
-          // do nothing
-        } else {
-          // There was a cross-origin issue, so we can't determine if the image is transparent.
-          // Therefore, we use the heuristic that small images shouldn't be uninverted.
-          let rect = node.getBoundingClientRect();
-          if (Math.min(rect.width, rect.height) < 32) {
-            node.style.filter = '';
-          }
-        }
-      });
+  if (USE_TRANSPARENT_INVERSION_HEURISTIC) {
+    if (node.nodeName) {
+      maybeInvertImage(node, node.src);
     } else {
+      let backgroundImageSource = null;
+      if (style.getPropertyValue('background-image').includes('url')) {
+        backgroundImageSource = style.getPropertyValue('background-image');
+      } else if (style.getPropertyValue('background').includes('url')) {
+        backgroundImageSource = style.getPropertyValue('background');
+      }
+      if (backgroundImageSource != null) {
+        let urlStart = backgroundImageSource.indexOf("\"") + 1;
+        let urlEnd = backgroundImageSource.lastIndexOf("\"") - 1;
+        backgroundImageSource = backgroundImageSource.substr(urlStart, urlEnd - urlStart + 1)
+        maybeInvertImage(node, backgroundImageSource);
+      }
+    }
+  } else {
+    let hasBackgroundImageSource = false;
+    hasBackgroundImageSource |= style.getPropertyValue('background-image').includes('url');
+    hasBackgroundImageSource |= style.getPropertyValue('background').includes('url');
+    if (hasBackgroundImageSource) {
+      node.style.filter = 'invert(100%)';
       // Only invert sufficiently large images.  Small ones are probably icons.
       let rect = node.getBoundingClientRect();
       let body = document.body.getBoundingClientRect();
@@ -168,6 +166,24 @@ function uninvert_smartly(node) {
       }
     }
   }
+}
+
+// Only call if `USE_TRANSPARENT_INVERSION_HEURISTIC` is true.
+function maybeInvertImage(element, url) {
+  imageTransparentAtURL(url, (url, isTransparent) => {
+    if (isTransparent === true) {
+      element.style.filter = '';
+    } else if (isTransparent === false) {
+      element.style.filter = 'invert(100%)';
+    } else {
+      // There was a cross-origin issue, so we can't determine if the image is transparent.
+      // Therefore, we use the heuristic that small images shouldn't be uninverted.
+      let rect = element.getBoundingClientRect();
+      if (Math.min(rect.width, rect.height) < 32) {
+        element.style.filter = '';
+      }
+    }
+  });
 }
 
 // Calls `callback(url, result)` either synchronously or asynchronously.
