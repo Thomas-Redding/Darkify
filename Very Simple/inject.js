@@ -228,12 +228,12 @@ function maybeInvertImage(element, url) {
 //   * false - the image has only opaque pixels
 //   * undefined - an error occured (probably cross origin in nature)
 function imageTransparentAtURL(url, callback) {
-  if (!imageTransparentAtURL._cache) {
-    imageTransparentAtURL._cache = {};
+  if (!this._cache) {
+    this._cache = {};
   }
   if (CACHE_TRANSPARENCY_TEST) {
-    if (url in imageTransparentAtURL._cache) {
-      return imageTransparentAtURL._cache[url];
+    if (url in this._cache) {
+      return this._cache[url];
     }
   }
   let image = new Image();
@@ -241,13 +241,13 @@ function imageTransparentAtURL(url, callback) {
   image.onload = () => {
     let isTransparent = isLoadedImageTransparent(image);
     if (CACHE_TRANSPARENCY_TEST) {
-      imageTransparentAtURL._cache[url] = isTransparent;
+      this._cache[url] = isTransparent;
     }
     callback(url, isTransparent);
   }
   image.onerror = () => {
     if (CACHE_TRANSPARENCY_TEST) {
-      imageTransparentAtURL._cache[url] = undefined;
+      this._cache[url] = undefined;
     }
     callback(url, undefined);
   }
