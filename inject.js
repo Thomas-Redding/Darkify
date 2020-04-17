@@ -18,6 +18,7 @@ function injectCSS(cssText) {
 function darkifyPage() {
   let css = '';
   css += 'html { background-color: black; filter: invert(100%) hue-rotate(180deg) brightness(' + PAGE_BRIGHTNESS + '); }';
+  // css += 'body { background-color: black; filter: invert(100%) hue-rotate(180deg) brightness(' + PAGE_BRIGHTNESS + '); }';
   if (!USE_TRANSPARENT_INVERSION_HEURISTIC) {
     css += 'IMG { filter: invert(100%) hue-rotate(180deg); }';
   }
@@ -84,6 +85,11 @@ function listenToImageSourceChange(element) {
 
 let isLoaded = false;
 window.addEventListener('load', () => {
+  window.addEventListener("keydown", (event) => {
+    if (event.keyCode == 65 && event.metaKey && event.altKey) {
+      recursivelyApplyToDom(uninvert_smartly);
+    }
+  });
   isLoaded = true;
   if (shouldInvert === 1) {
     // Inject css tag to dark-mode the page.
@@ -96,7 +102,7 @@ window.addEventListener('load', () => {
     // Finally we need to continue calling `uninvert_smartly` on every new
     // element and any time <img>.src changes.
 
-    // Call `uninvert_smartly` on every new element.s
+    // Call `uninvert_smartly` on every new element.
     let observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         for (let node of mutation.addedNodes) {
@@ -204,6 +210,10 @@ function uninvert_smartly(node) {
 }
 
 // Only call if `USE_TRANSPARENT_INVERSION_HEURISTIC` is true.
+// Of all the bugs I've seen, they've all been rectified by calling this function.
+// In other words, this extension's only problem is that it sometimes doesn't
+// call this function on <img> tags and on elements with image backgrounds.
+// In other other words, the problem is with the MutationObserver code.
 function maybeInvertImage(element, url) {
   imageTransparentAtURL(url, (url, isTransparent) => {
     if (isTransparent === true) {
