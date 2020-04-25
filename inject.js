@@ -6,12 +6,20 @@ let PAGE_BRIGHTNESS = 0.7;
 
 /*
  Elements with image data with a width and height both larger than
- ICON_THRESHOLD will be inverted regardless of their contents. In practice, this
- variable should be set to the largests reasonable non-invertd image (typically
- equations). This must be balanced with the costly alpha-checks that get applied
- to smaller elements.
+ ICON_THRESHOLD will be inverted regardless of their contents. Smaller images
+ will still be inverted if they are transparent. If their transparency cannot be
+ determined, they will still (still) be inverted if they are larger than
+ ICON_THRESHOLD_1.
+
+ The primary purpose of ICON_THRESHOLD is to minimizee the network and compute
+ needed to determine the existence of alpha pixels for large images. The primary
+ purpose of ICON_THRESHOLD_1 is to provide a good heuristic when we can't
+ determine whether alpha pixels exist.
  */
-let ICON_THRESHOLD = 70;
+let ICON_THRESHOLD = 100;
+let ICON_THRESHOLD_1 = 40;
+
+
 
 // Inject a <style> tag with the given CSS string.
 function injectCSS(cssText) {
@@ -96,7 +104,10 @@ function listenForChanges(element) {
     let observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         if (mutation.attributeName == "style") {
-          uninvert_smartly(mutation.target);
+          // The change could be a change to background-image, a change from
+          // display:none, or neither.
+          // In the second case, we need to recurse.
+          recursivelyApplyToDom(uninvert_smartly, mutation.target);
         }
       });
     });
@@ -247,7 +258,11 @@ function maybeInvertImage(element, url) {
       // There was a cross-origin issue, so we can't determine if the image is
       // transparent. Therefore, we use the heuristic that small images
       // shouldn't be uninverted.
-      element.style.filter = '';
+      if (Math.min(rect.width, rect.height) >= ICON_THRESHOLD_1) {
+        element.style.filter = 'invert(100%) hue-rotate(180deg)';
+      } else {
+        element.style.filter = '';
+      }
     }
   });
 }
