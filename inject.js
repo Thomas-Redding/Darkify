@@ -25,8 +25,8 @@ function injectCSS(cssText) {
 // uninverts <img>, <canvas>, and <video> elements.
 function darkifyPage() {
   let css = '';
-  // css += 'html { background-color: black; filter: invert(100%) hue-rotate(180deg) brightness(' + PAGE_BRIGHTNESS + '); }';
-  css += 'body { background-color: black; filter: invert(100%) hue-rotate(180deg) brightness(' + PAGE_BRIGHTNESS + '); }';
+  css += 'html { background-color: black; }';
+  css += 'body { filter: invert(100%) hue-rotate(180deg) brightness(' + PAGE_BRIGHTNESS + '); }';
   if (!USE_TRANSPARENT_INVERSION_HEURISTIC) {
     css += 'IMG { filter: invert(100%) hue-rotate(180deg); }';
   }
