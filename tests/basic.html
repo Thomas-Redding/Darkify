@@ -1,0 +1,34 @@
+<style>
+.pic1 {
+  width: 200px; 
+  height: 200px;
+  background: url(https://pbs.twimg.com/profile_images/378800000736147340/3bbccd1bc878e5badfcfe26d4aea98ec.jpeg);
+}
+</style>
+<img src="https://pbs.twimg.com/profile_images/378800000736147340/3bbccd1bc878e5badfcfe26d4aea98ec.jpeg"/>
+<div class="pic1"></div>
+<div class="pic2"></div>
+<input type="button" onclick="go();" value="click me">
+<script>
+
+let URL = "https://pbs.twimg.com/profile_images/378800000736147340/3bbccd1bc878e5badfcfe26d4aea98ec.jpeg";
+window.addEventListener("load", (element) => {/*
+  let pics = element.getElementsByClassName("pic2");
+  for (pic in pics) {
+  	pic.style.background = "url(" + URL + ")";
+  }*/
+  setTimeout(go, 1000);
+});
+
+function go() {
+  html = `
+    <img src="` + URL + `"/>
+    <div class="pic1"></div>
+    <div class="pic2"></div>
+  `;
+  let div = document.createElement("div");
+  div.innerHTML = html;
+  document.body.append(div);
+}
+
+</script>
