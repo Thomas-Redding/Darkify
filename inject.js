@@ -4,6 +4,11 @@ let USE_TRANSPARENT_INVERSION_HEURISTIC = true;
 let CACHE_TRANSPARENCY_TEST = true;
 let PAGE_BRIGHTNESS = 0.7;
 let ICON_THRESHOLD = 32;
+function log() {
+  if (false) {
+    console.log.apply(console, arguments);
+  }
+}
 
 // Inject a <style> tag with the given CSS string.
 function injectCSS(cssText) {
@@ -74,13 +79,26 @@ coverObserver.observe(document.documentElement, { childList: true });
 // Note: Chrome does not support "DOMAttrModified" devents, so we need to use
 // mutation observers.
 
-function listenToImageSourceChange(element) {
-  let observer = new MutationObserver((mutations) => {
-    mutations.forEach((mutation) => {
-      uninvert_smartly(mutation.target);
+function listenForChanges(element) {
+  if (element.tagName == "IMG") {
+    let observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName == "src") {
+          log("a", mutation);
+        }
+      });
     });
-  });
-  observer.observe(element, {attributes: true});
+    observer.observe(element, {attributes: true});
+  } else {
+    let observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName == "style") {
+          log("b", mutation);
+        }
+      });
+    });
+    observer.observe(element, {attributes: true});
+  }
 }
 
 let isLoaded = false;
@@ -106,26 +124,14 @@ window.addEventListener('load', () => {
     let observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         for (let node of mutation.addedNodes) {
-          recursivelyApplyToDom((element) => {
-            // Call `uninvert_smartly` on an <img> element when its `src`
-            // attribute changes.
-            if (element.tagName != "IMG") return;
-            console.log("tfr:a", element);
-            listenToImageSourceChange(element);
-          }, node);
+          log("added", node);
+          recursivelyApplyToDom(listenForChanges, node);
           recursivelyApplyToDom(uninvert_smartly, node);
         }
       })
     });
     // Set up observer to un-invert some nodes as they're created.
     observer.observe(document.body, { childList: true });
-
-    // Call `uninvert_smartly` on an <img> element when its `src` attribute
-    // changes.
-    recursivelyApplyToDom((element) => {
-      if (element.tagName != "IMG") return;
-      listenToImageSourceChange(element);
-    });
   }
   // When (actually before) the page loaded we covered it with a
   // div to prevent the "flashbang" effect where a page is
@@ -247,7 +253,7 @@ function imageTransparentAtURL(url, callback) {
   }
   if (CACHE_TRANSPARENCY_TEST) {
     if (url in this._cache) {
-      return this._cache[url];
+      callback(this._cache[url], url);
     }
   }
   let image = new Image();
