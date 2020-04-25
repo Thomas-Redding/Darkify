@@ -3,7 +3,7 @@
 let USE_TRANSPARENT_INVERSION_HEURISTIC = true;
 let CACHE_TRANSPARENCY_TEST = true;
 let PAGE_BRIGHTNESS = 0.7;
-let ICON_THRESHOLD = 32;
+let ICON_THRESHOLD = 40;
 
 // Inject a <style> tag with the given CSS string.
 function injectCSS(cssText) {
@@ -83,7 +83,7 @@ function listenForChanges(element) {
         }
       });
     });
-    observer.observe(element, {attributes: true});
+    observer.observe(element, {attributes: true, attributeFilter: ["srcs"]});
   } else {
     let observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
@@ -92,7 +92,7 @@ function listenForChanges(element) {
         }
       });
     });
-    observer.observe(element, {attributes: true});
+    observer.observe(element, {attributes: true, attributeFilter: ["style"]});
   }
 }
 
@@ -180,7 +180,7 @@ function uninvert_smartly(node) {
 
   if (USE_TRANSPARENT_INVERSION_HEURISTIC) {
     if (node.nodeName == "IMG") {
-      maybeInvertImage(node, node.src);
+      asyncMaybeInvertImage(node, node.src);
     } else {
       let backgroundImageSource = null;
       if (style.getPropertyValue('background-image').includes('url')) {
@@ -192,7 +192,7 @@ function uninvert_smartly(node) {
         let urlStart = backgroundImageSource.indexOf("\"") + 1;
         let urlEnd = backgroundImageSource.lastIndexOf("\"") - 1;
         backgroundImageSource = backgroundImageSource.substr(urlStart, urlEnd - urlStart + 1)
-        maybeInvertImage(node, backgroundImageSource);
+        asyncMaybeInvertImage(node, backgroundImageSource);
       }
     }
   } else {
@@ -210,26 +210,36 @@ function uninvert_smartly(node) {
   }
 }
 
+function asyncMaybeInvertImage(element, url) {
+	// TODO: Figure out why this is neccessary.
+	// I *think* we're calling this before the element achieves its final size.
+	setTimeout(() => { maybeInvertImage(element, url); }, 1);
+	setTimeout(() => { maybeInvertImage(element, url); }, 10);
+	setTimeout(() => { maybeInvertImage(element, url); }, 100);
+	setTimeout(() => { maybeInvertImage(element, url); }, 1000);
+}
+
 // Only call if `USE_TRANSPARENT_INVERSION_HEURISTIC` is true.
 // Of all the bugs I've seen, they've all been rectified by calling this function.
 // In other words, this extension's only problem is that it sometimes doesn't
 // call this function on <img> tags and on elements with image backgrounds.
 // In other other words, the problem is with the MutationObserver code.
 function maybeInvertImage(element, url) {
+  let rect = element.getBoundingClientRect();
+  if (Math.min(rect.width, rect.height) >= ICON_THRESHOLD) {
+    element.style.filter = 'invert(100%) hue-rotate(180deg)';
+    return;
+  }
   imageTransparentAtURL(url, (url, isTransparent) => {
     if (isTransparent === true) {
       element.style.filter = '';
     } else if (isTransparent === false) {
       element.style.filter = 'invert(100%) hue-rotate(180deg)';
     } else {
-      // There was a cross-origin issue, so we can't determine if the image is transparent.
-      // Therefore, we use the heuristic that small images shouldn't be uninverted.
-      let rect = element.getBoundingClientRect();
-      if (Math.min(rect.width, rect.height) < ICON_THRESHOLD) {
-        element.style.filter = '';
-      } else {
-        element.style.filter = 'invert(100%) hue-rotate(180deg)';
-      }
+      // There was a cross-origin issue, so we can't determine if the image is
+      // transparent. Therefore, we use the heuristic that small images
+      // shouldn't be uninverted.
+      element.style.filter = '';
     }
   });
 }
@@ -310,6 +320,7 @@ chrome.storage.sync.get('darkify_blacklist', (result) => {
     let prepopulatedBlacklist = [
       'https://www.netflix.com/*',
       'https://www.disneyplus.com/*',
+      'https://twitter.com/*',
     ];
     chrome.storage.sync.set({'darkify_blacklist': prepopulatedBlacklist }, (x) => {});
     blacklist = [];
@@ -319,7 +330,16 @@ chrome.storage.sync.get('darkify_blacklist', (result) => {
     return;
   }
   for (let i = 0; i < blacklist.length; ++i) {
-    if (wildcardStringMatch(blacklist[i], pageUrl)) return;
+    if (wildcardStringMatch(blacklist[i], pageUrl)) {
+      shouldInvert = -1;
+      return;
+    }
+  }
+  if (window.location.href.endsWith(".pdf")) {
+    shouldInvert = -1;
+    // TODO: Find if there is a non-bad solution.s
+    // injectCSS(`embed { filter: invert(1) hue-rotate(180deg); }`);
+    return;
   }
   shouldInvert = 1;
   if (isLoaded) {
