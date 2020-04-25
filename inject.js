@@ -3,7 +3,15 @@
 let USE_TRANSPARENT_INVERSION_HEURISTIC = true;
 let CACHE_TRANSPARENCY_TEST = true;
 let PAGE_BRIGHTNESS = 0.7;
-let ICON_THRESHOLD = 40;
+
+/*
+ Elements with image data with a width and height both larger than
+ ICON_THRESHOLD will be inverted regardless of their contents. In practice, this
+ variable should be set to the largests reasonable non-invertd image (typically
+ equations). This must be balanced with the costly alpha-checks that get applied
+ to smaller elements.
+ */
+let ICON_THRESHOLD = 70;
 
 // Inject a <style> tag with the given CSS string.
 function injectCSS(cssText) {
