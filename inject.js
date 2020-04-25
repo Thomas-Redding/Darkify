@@ -17,8 +17,8 @@ function injectCSS(cssText) {
 // uninverts <img>, <canvas>, and <video> elements.
 function darkifyPage() {
   let css = '';
-  css += 'html { background-color: black; filter: invert(100%) hue-rotate(180deg) brightness(' + PAGE_BRIGHTNESS + '); }';
-  // css += 'body { background-color: black; filter: invert(100%) hue-rotate(180deg) brightness(' + PAGE_BRIGHTNESS + '); }';
+  // css += 'html { background-color: black; filter: invert(100%) hue-rotate(180deg) brightness(' + PAGE_BRIGHTNESS + '); }';
+  css += 'body { background-color: black; filter: invert(100%) hue-rotate(180deg) brightness(' + PAGE_BRIGHTNESS + '); }';
   if (!USE_TRANSPARENT_INVERSION_HEURISTIC) {
     css += 'IMG { filter: invert(100%) hue-rotate(180deg); }';
   }
@@ -110,8 +110,9 @@ window.addEventListener('load', () => {
             // Call `uninvert_smartly` on an <img> element when its `src`
             // attribute changes.
             if (element.tagName != "IMG") return;
+            console.log("tfr:a", element);
             listenToImageSourceChange(element);
-          }, node)
+          }, node);
           recursivelyApplyToDom(uninvert_smartly, node);
         }
       })
