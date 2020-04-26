@@ -275,6 +275,9 @@ function maybeInvertImage(element, url) {
 //   * false - the image has only opaque pixels
 //   * undefined - an error occured (probably cross origin in nature)
 function imageTransparentAtURL(url, callback) {
+  if (url.startsWith("https")) {
+    callback(url, undefined);
+  }
   if (!this._cache) {
     this._cache = {};
   }
@@ -298,7 +301,7 @@ function imageTransparentAtURL(url, callback) {
     }
     callback(url, undefined);
   }
-  image.src = url
+  image.src = url;
 }
 
 // A synchronous version of `imageTransparentAtURL` for when the image is
