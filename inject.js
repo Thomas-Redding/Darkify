@@ -99,8 +99,7 @@ window.addEventListener('load', () => {
     // `uninvert_smartly` on everything.
     recursivelyApplyToDom(uninvert_smartly);
 
-    // Finally we need to continue calling `uninvert_smartly` on every new
-    // element and any time <img>.src changes.
+    // Call `uninvert_smartly` on every new element and any time <img>.src changes.
 
     // Call `uninvert_smartly` on every new element.
     let observer = new MutationObserver((mutations) => {
