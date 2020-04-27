@@ -95,7 +95,7 @@ function listenForChanges(element) {
     let observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         if (mutation.attributeName == "src") {
-          uninvert_smartly(mutation.target);
+          recursivelyApplyToDom(uninvert_smartly, mutation.target);
         }
       });
     });
