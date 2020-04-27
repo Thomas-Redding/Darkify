@@ -3,7 +3,23 @@
 let USE_TRANSPARENT_INVERSION_HEURISTIC = true;
 let CACHE_TRANSPARENCY_TEST = true;
 let PAGE_BRIGHTNESS = 0.7;
-let ICON_THRESHOLD = 32;
+
+/*
+ Elements with image data with a width and height both larger than
+ ICON_THRESHOLD will be inverted regardless of their contents. Smaller images
+ will still be inverted if they are transparent. If their transparency cannot be
+ determined, they will still (still) be inverted if they are larger than
+ ICON_THRESHOLD_1.
+
+ The primary purpose of ICON_THRESHOLD is to minimizee the network and compute
+ needed to determine the existence of alpha pixels for large images. The primary
+ purpose of ICON_THRESHOLD_1 is to provide a good heuristic when we can't
+ determine whether alpha pixels exist.
+ */
+let ICON_THRESHOLD = 100;
+let ICON_THRESHOLD_1 = 40;
+
+
 
 // Inject a <style> tag with the given CSS string.
 function injectCSS(cssText) {
@@ -17,8 +33,8 @@ function injectCSS(cssText) {
 // uninverts <img>, <canvas>, and <video> elements.
 function darkifyPage() {
   let css = '';
-  css += 'html { background-color: black; filter: invert(100%) hue-rotate(180deg) brightness(' + PAGE_BRIGHTNESS + '); }';
-  // css += 'body { background-color: black; filter: invert(100%) hue-rotate(180deg) brightness(' + PAGE_BRIGHTNESS + '); }';
+  css += 'html { background-color: black; }';
+  css += 'body { filter: invert(100%) hue-rotate(180deg) brightness(' + PAGE_BRIGHTNESS + '); }';
   if (!USE_TRANSPARENT_INVERSION_HEURISTIC) {
     css += 'IMG { filter: invert(100%) hue-rotate(180deg); }';
   }
@@ -74,13 +90,29 @@ coverObserver.observe(document.documentElement, { childList: true });
 // Note: Chrome does not support "DOMAttrModified" devents, so we need to use
 // mutation observers.
 
-function listenToImageSourceChange(element) {
-  let observer = new MutationObserver((mutations) => {
-    mutations.forEach((mutation) => {
-      uninvert_smartly(mutation.target);
+function listenForChanges(element) {
+  if (element.tagName == "IMG") {
+    let observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName == "src") {
+          recursivelyApplyToDom(uninvert_smartly, mutation.target);
+        }
+      });
     });
-  });
-  observer.observe(element, {attributes: true});
+    observer.observe(element, {attributes: true, attributeFilter: ["srcs"]});
+  } else {
+    let observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName == "style") {
+          // The change could be a change to background-image, a change from
+          // display:none, or neither.
+          // In the second case, we need to recurse.
+          recursivelyApplyToDom(uninvert_smartly, mutation.target);
+        }
+      });
+    });
+    observer.observe(element, {attributes: true, attributeFilter: ["style"]});
+  }
 }
 
 let isLoaded = false;
@@ -105,25 +137,13 @@ window.addEventListener('load', () => {
     let observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         for (let node of mutation.addedNodes) {
-          recursivelyApplyToDom((element) => {
-            // Call `uninvert_smartly` on an <img> element when its `src`
-            // attribute changes.
-            if (element.tagName != "IMG") return;
-            listenToImageSourceChange(element);
-          }, node)
+          recursivelyApplyToDom(listenForChanges, node);
           recursivelyApplyToDom(uninvert_smartly, node);
         }
       })
     });
     // Set up observer to un-invert some nodes as they're created.
-    observer.observe(document.body, { childList: true });
-
-    // Call `uninvert_smartly` on an <img> element when its `src` attribute
-    // changes.
-    recursivelyApplyToDom((element) => {
-      if (element.tagName != "IMG") return;
-      listenToImageSourceChange(element);
-    });
+    observer.observe(document.body, { childList: true, subtree: true });
   }
   // When (actually before) the page loaded we covered it with a
   // div to prevent the "flashbang" effect where a page is
@@ -178,7 +198,7 @@ function uninvert_smartly(node) {
 
   if (USE_TRANSPARENT_INVERSION_HEURISTIC) {
     if (node.nodeName == "IMG") {
-      maybeInvertImage(node, node.src);
+      asyncMaybeInvertImage(node, node.src);
     } else {
       let backgroundImageSource = null;
       if (style.getPropertyValue('background-image').includes('url')) {
@@ -190,7 +210,7 @@ function uninvert_smartly(node) {
         let urlStart = backgroundImageSource.indexOf("\"") + 1;
         let urlEnd = backgroundImageSource.lastIndexOf("\"") - 1;
         backgroundImageSource = backgroundImageSource.substr(urlStart, urlEnd - urlStart + 1)
-        maybeInvertImage(node, backgroundImageSource);
+        asyncMaybeInvertImage(node, backgroundImageSource);
       }
     }
   } else {
@@ -208,25 +228,39 @@ function uninvert_smartly(node) {
   }
 }
 
+function asyncMaybeInvertImage(element, url) {
+	// TODO: Figure out why this is neccessary.
+	// I *think* we're calling this before the element achieves its final size.
+	setTimeout(() => { maybeInvertImage(element, url); }, 1);
+	setTimeout(() => { maybeInvertImage(element, url); }, 10);
+	setTimeout(() => { maybeInvertImage(element, url); }, 100);
+	setTimeout(() => { maybeInvertImage(element, url); }, 1000);
+}
+
 // Only call if `USE_TRANSPARENT_INVERSION_HEURISTIC` is true.
 // Of all the bugs I've seen, they've all been rectified by calling this function.
 // In other words, this extension's only problem is that it sometimes doesn't
 // call this function on <img> tags and on elements with image backgrounds.
 // In other other words, the problem is with the MutationObserver code.
 function maybeInvertImage(element, url) {
+  let rect = element.getBoundingClientRect();
+  if (Math.min(rect.width, rect.height) >= ICON_THRESHOLD) {
+    element.style.filter = 'invert(100%) hue-rotate(180deg)';
+    return;
+  }
   imageTransparentAtURL(url, (url, isTransparent) => {
     if (isTransparent === true) {
       element.style.filter = '';
     } else if (isTransparent === false) {
       element.style.filter = 'invert(100%) hue-rotate(180deg)';
     } else {
-      // There was a cross-origin issue, so we can't determine if the image is transparent.
-      // Therefore, we use the heuristic that small images shouldn't be uninverted.
-      let rect = element.getBoundingClientRect();
-      if (Math.min(rect.width, rect.height) < ICON_THRESHOLD) {
-        element.style.filter = '';
-      } else {
+      // There was a cross-origin issue, so we can't determine if the image is
+      // transparent. Therefore, we use the heuristic that small images
+      // shouldn't be uninverted.
+      if (Math.min(rect.width, rect.height) >= ICON_THRESHOLD_1) {
         element.style.filter = 'invert(100%) hue-rotate(180deg)';
+      } else {
+        element.style.filter = '';
       }
     }
   });
@@ -240,12 +274,15 @@ function maybeInvertImage(element, url) {
 //   * false - the image has only opaque pixels
 //   * undefined - an error occured (probably cross origin in nature)
 function imageTransparentAtURL(url, callback) {
+  if (url.startsWith("https")) {
+    callback(url, undefined);
+  }
   if (!this._cache) {
     this._cache = {};
   }
   if (CACHE_TRANSPARENCY_TEST) {
     if (url in this._cache) {
-      return this._cache[url];
+      callback(this._cache[url], url);
     }
   }
   let image = new Image();
@@ -263,7 +300,7 @@ function imageTransparentAtURL(url, callback) {
     }
     callback(url, undefined);
   }
-  image.src = url
+  image.src = url;
 }
 
 // A synchronous version of `imageTransparentAtURL` for when the image is
@@ -308,6 +345,7 @@ chrome.storage.sync.get('darkify_blacklist', (result) => {
     let prepopulatedBlacklist = [
       'https://www.netflix.com/*',
       'https://www.disneyplus.com/*',
+      'https://twitter.com/*',
     ];
     chrome.storage.sync.set({'darkify_blacklist': prepopulatedBlacklist }, (x) => {});
     blacklist = [];
@@ -317,7 +355,16 @@ chrome.storage.sync.get('darkify_blacklist', (result) => {
     return;
   }
   for (let i = 0; i < blacklist.length; ++i) {
-    if (wildcardStringMatch(blacklist[i], pageUrl)) return;
+    if (wildcardStringMatch(blacklist[i], pageUrl)) {
+      shouldInvert = -1;
+      return;
+    }
+  }
+  if (window.location.href.endsWith(".pdf")) {
+    shouldInvert = -1;
+    // TODO: Find if there is a non-bad solution.s
+    // injectCSS(`embed { filter: invert(1) hue-rotate(180deg); }`);
+    return;
   }
   shouldInvert = 1;
   if (isLoaded) {
